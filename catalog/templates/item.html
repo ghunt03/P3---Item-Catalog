@@ -1,11 +1,12 @@
 {% extends "layout-sidebar.html" %}
 {% block content %}
 <h1>Project: {{item.project_title}}</h1>
+{% if session.user_id == item.user_id %}
 <div class="btn-group" role="group">
     <a href="{{ url_for('editCatalogItem',item_id=item.id)}}" class="btn btn-default">Edit</a>
     <a href="{{ url_for('deleteCatalogItem',item_id=item.id)}}" class="btn btn-default">Delete</a>
 </div>
-
+{% endif %}
 <br/><br/>
 <div id="myCarousel" class="carousel slide" style="width:570px;" data-ride="carousel">
     <ol class="carousel-indicators">

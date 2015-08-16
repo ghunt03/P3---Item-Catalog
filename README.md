@@ -25,6 +25,7 @@ This project is a web based application which can be used to store information a
 - Catalog (folder) - contains code files for application
     - database_setup.py - creates the sqllite database using SQL Alchemy
     - populate_database.py - populates the database with some sample projects
+    - sample_data (folder) - contains csv files used by populate_database.py
     - application.py - contains flask application
     - static (folder) - contains css, javascript and fonts used by bootstrap for styling
     - templates (folder) - contains html templates which are render by flask
@@ -32,9 +33,10 @@ This project is a web based application which can be used to store information a
         - layout-form.html - used as shared template for pages with forms
     - uploads (folder) - folder where photos are uploaded to. Currently contains images used by sample projects
 
+
 ## Instructions
 ### Starting Virtual Machine
-1. browse to downloaded folder (folder which contains vagrantfile)
+1. Browse to downloaded folder (folder which contains vagrantfile)
 2. Run ```vagrant up``` (this will start the virtual machine)
 3. To connect to the virtual machine run ```vagrant ssh```
 4. Once you have connected to the terminal interface, run the following command to access the catalog project
@@ -44,25 +46,22 @@ This project is a web based application which can be used to store information a
 ### Creating the database
 To create the database with sqllite run:
 
-```
-        python database_setup.py
-```
+```python database_setup.py```
 
 ### Populate Example Projects
 To prepopulate the database with example projects run:
 
-        ```python populate_database.py```
+``` python populate_database.py```
 
 ### Running the application
 To start the Flask application run:
 
-        ```python application.py```
+ ```python application.py```
 
 Then open the web browser and go to:
         
         http://localhost:5000
 
 ##TODO
-- Add OAuth authentication and only allow registered users to add, delete or edit projects
 - Add endpoints such as JSON, RSS etc
 - Add voting function to allow registered users to vote on projects
