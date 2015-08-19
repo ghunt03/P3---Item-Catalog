@@ -61,7 +61,3 @@ To start the Flask application run:
 Then open the web browser and go to:
         
         http://localhost:5000
-
-##TODO
-- Add endpoints such as JSON, RSS etc
-- Add voting function to allow registered users to vote on projects
