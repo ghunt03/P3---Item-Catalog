@@ -3,15 +3,18 @@ import string
 import os
 import datetime
 from flask import Flask, render_template, request, flash, redirect, url_for
-from flask import session as login_session, send_from_directory, make_response
+from flask import send_from_directory, make_response
+from flask import session as login_session, jsonify
 from werkzeug import secure_filename
+from werkzeug.contrib.atom import AtomFeed
+from urlparse import urljoin
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from database_setup import Category, Base, Project, User
-
+import json
 from oauth2client.client import flow_from_clientsecrets, FlowExchangeError
 import httplib2
-import json
 import requests
 
 
@@ -22,10 +25,6 @@ app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads/'
 # These are the extension that we are accepting to be uploaded
 app.config['ALLOWED_EXTENSIONS'] = set(['png', 'jpg', 'jpeg', 'gif'])
-
-app.config['CLIENT_ID'] = json.loads(
-    open('client_secrets.json', 'r').read())['web']['client_id']
-
 
 engine = create_engine('sqlite:///catalog.db')
 Base.metadata.bind = engine
@@ -44,7 +43,8 @@ def home():
     the last 5 projects.
 
     """
-    items = session.query(Project).order_by(Project.id.desc()).limit(5)
+    items = session.query(Project).order_by(
+        Project.last_updated.desc()).limit(5)
     return render_template(
         "home.html",
         categories=categories,
@@ -96,18 +96,39 @@ def showLogin():
     return render_template("login.html", STATE=state)
 
 
-@app.route('/gconnect', methods=['POST'])
-def gconnect():
-    """Connection and validation method for logging in using Google+
+@app.route('/connect/<string:provider>', methods=['POST'])
+def connect(provider):
+    """Route for authentication from login page
     """
-    if request.args.get('state') != login_session['state']:
+    state_token = request.args.get('state')
+    if state_token != login_session['state']:
         response = make_response(json.dumps('Invalid state parameter'), 401)
         response.headers['Content-Type'] = 'application/json'
         return response
+    results = ""
+    if provider == 'facebook':
+        results = fbconnect()
+    else:
+        results = gconnect()
+    # see if user exists, if it doesn't make a new one
+    user_id = getUserID(login_session['email'])
+    if not user_id:
+        user_id = createUser(login_session)
+    login_session['user_id'] = user_id
+    flash("you are now logged in as %s" % login_session['username'])
+    return results
+
+
+def gconnect():
+    """Connection and validation method for logging in using Google+
+    """
     code = request.data
+    auth_config = json.loads(open('client_secrets_google.json', 'r').read())[
+        'web']
+
     try:
         oauth_flow = flow_from_clientsecrets(
-            'client_secrets_google.json', 
+            'client_secrets_google.json',
             scope='')
         oauth_flow.redirect_uri = 'postmessage'
         credentials = oauth_flow.step2_exchange(code)
@@ -117,7 +138,7 @@ def gconnect():
         response.headers['Content-Type'] = 'application/json'
         return response
     access_token = credentials.access_token
-    url = ('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=%s'
+    url = (auth_config['access_token_uri']
            % access_token)
     h = httplib2.Http()
     result = json.loads(h.request(url, 'GET')[1])
@@ -133,7 +154,7 @@ def gconnect():
         response.headers['Content-Type'] = 'application/json'
         return response
     # verify that the access token is valid for this app
-    if result['issued_to'] != app.config['CLIENT_ID']:
+    if result['issued_to'] != auth_config['client_id']:
         response = make_response(json.dumps("Token's client id doesn't \
             match apps"), 401)
         response.headers['Content-Type'] = 'application/json'
@@ -152,7 +173,7 @@ def gconnect():
     login_session['gplus_id'] = gplus_id
 
     # get user info
-    userinfo_url = "https://www.googleapis.com/oauth2/v1/userinfo"
+    userinfo_url = auth_config["userinfo_url"]
     params = {'access_token': credentials.access_token, 'alt': 'json'}
     answer = requests.get(userinfo_url, params=params)
 
@@ -161,40 +182,27 @@ def gconnect():
     login_session['picture'] = data['picture']
     login_session['email'] = data['email']
     login_session['provider'] = "google"
-
-    # see if user exists, if it doesn't make a new one
-    user_id = getUserID(login_session['email'])
-    if not user_id:
-        user_id = createUser(login_session)
-    login_session['user_id'] = user_id
-    flash("you are now logged in as %s" % login_session['username'])
     return "success"
 
 
-@app.route('/fbconnect', methods=['POST'])
 def fbconnect():
-    """Connection and validation method for logging in using Facebook+
+    """Connection and validation method for logging in using Facebook
     """
-    if request.args.get('state') != login_session['state']:
-        response = make_response(json.dumps('Invalid state parameter.'), 401)
-        response.headers['Content-Type'] = 'application/json'
-        return response
-    access_token = request.data
-    app_id = json.loads(open('client_secrets_facebook.json', 'r').read())[
-        'web']['app_id']
-    app_secret = json.loads(
-        open('client_secrets_facebook.json', 'r').read())['web']['app_secret']
-    url = 'https://graph.facebook.com/oauth/access_token?grant_type=fb_exchange_token&client_id=%s&client_secret=%s&fb_exchange_token=%s' % (  # noqa
-        app_id, app_secret, access_token)
+    code = request.data
+    auth_config = json.loads(open('client_secrets_facebook.json', 'r').read())[
+        'web']
+    app_id = auth_config['app_id']
+    app_secret = auth_config['app_secret']
+    url = auth_config['auth_url'] % (app_id, app_secret, code)
     h = httplib2.Http()
     result = h.request(url, 'GET')[1]
 
     # Use token to get user info from API
-    userinfo_url = "https://graph.facebook.com/v2.4/me"
+    userinfo_url = auth_config['userinfo_url']
     # strip expire tag from access token
     token = result.split("&")[0]
 
-    url = 'https://graph.facebook.com/v2.4/me?%s&fields=name,id,email' % token
+    url = auth_config["scope_url"] % token
     h = httplib2.Http()
     result = h.request(url, 'GET')[1]
     # print "url sent for API access:%s"% url
@@ -213,20 +221,12 @@ def fbconnect():
     login_session['access_token'] = stored_token
 
     # Get user picture
-    url = 'https://graph.facebook.com/v2.4/me/picture?%s&redirect=0&height=200&width=200' % token  # noqa
+    url = auth_config['picture_url'] % token  # noqa
     h = httplib2.Http()
     result = h.request(url, 'GET')[1]
     data = json.loads(result)
-
     login_session['picture'] = data["data"]["url"]
 
-    # see if user exists
-    user_id = getUserID(login_session['email'])
-    if not user_id:
-        user_id = createUser(login_session)
-    login_session['user_id'] = user_id
-
-    flash("Now logged in as %s" % login_session['username'])
     return "success"
 
 
@@ -539,6 +539,49 @@ def getThumbnail(item_id):
     if filename == "":
         filename = getImages(item_id)[0]
     return filename
+
+
+@app.route('/catalog/category/<int:category_id>/JSON')
+def catalogCategoryJSON(category_id):
+    items = session.query(Project).filter_by(category_id=category_id).all()
+    return jsonify(Projects=[i.serialize for i in items])
+
+
+@app.route('/catalog/JSON')
+def catalogJSON():
+    categories = session.query(Category).all()
+    serializedCategories = []
+    for i in categories:
+        new_cat = i.serialize
+        items = session.query(Project).filter_by(category_id=i.id).all()
+        serializedItems = []
+        for j in items:
+            serializedItems.append(j.serialize)
+        new_cat['items'] = serializedItems
+        serializedCategories.append(new_cat)
+    return jsonify(Categories=serializedCategories)
+
+
+def make_external(url):
+    return urljoin(request.url_root, url)
+
+
+@app.route('/catalog/recent.atom')
+def atom_feed():
+    feed = AtomFeed('Recent Projects',
+                    feed_url=request.url, url=request.url_root)
+    items = session.query(Project).order_by(
+        Project.last_updated.desc()).limit(10)
+    for item in items:
+        feed.add(
+            item.project_title,
+            unicode(item.description),
+            content_type='html',
+            author=item.user.name,
+            url=make_external(url_for('catalogItem', item_id=item.id)),
+            updated=item.last_updated,
+            published=item.last_updated)
+    return feed.get_response()
 
 
 if __name__ == '__main__':

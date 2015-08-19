@@ -25,12 +25,11 @@ session = DBSession()
 # Create dummy user
 
 User1 = User(
-    name="GHunt", 
+    name="GHunt",
     email="g.hunt@manteena.com.au",
     picture='http://www.manteena.com.au/images/logo.gif')
 session.add(User1)
 session.commit()
-
 
 with open('sample_data\categories.csv', 'rb') as csvfile:
     reader = csv.reader(csvfile, delimiter=',', quotechar='"')
@@ -39,9 +38,7 @@ with open('sample_data\categories.csv', 'rb') as csvfile:
         session.add(category)
         session.commit()
 
-        
-
-with open('sample_data\projects.csv','rb') as csvfile:
+with open('sample_data\projects.csv', 'rb') as csvfile:
     reader = csv.reader(csvfile, delimiter=',', quotechar='"')
     for row in reader:
         category = session.query(Category).filter_by(name=row[0]).one()
