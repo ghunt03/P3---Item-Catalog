@@ -3,6 +3,7 @@
 
 <h1>Create New Item</h1>
 <form class="form-horizontal" role="form" action="{{ url_for('addCatalogItem')}}" method='post' enctype="multipart/form-data">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <div class="form-group">
         <label class="control-label col-sm-2" for="project_title">Project Title:</label>
         <div class="col-sm-10">

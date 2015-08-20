@@ -5,6 +5,7 @@ import datetime
 from flask import Flask, render_template, request, flash, redirect, url_for
 from flask import send_from_directory, make_response
 from flask import session as login_session, jsonify
+from flask.ext.seasurf import SeaSurf
 from werkzeug import secure_filename
 from werkzeug.contrib.atom import AtomFeed
 from urlparse import urljoin
@@ -19,7 +20,7 @@ import requests
 
 
 app = Flask(__name__)
-
+csrf = SeaSurf(app)
 
 # This is the path to the upload directory
 app.config['UPLOAD_FOLDER'] = 'uploads/'
@@ -96,9 +97,11 @@ def showLogin():
     return render_template("login.html", STATE=state)
 
 
+@csrf.exempt
 @app.route('/connect/<string:provider>', methods=['POST'])
 def connect(provider):
     """Route for authentication from login page
+    csrf is exempt from this view because of the use of state tokens
     """
     state_token = request.args.get('state')
     if state_token != login_session['state']:
@@ -543,12 +546,19 @@ def getThumbnail(item_id):
 
 @app.route('/catalog/category/<int:category_id>/JSON')
 def catalogCategoryJSON(category_id):
+    """Returns projects within category in a JSON format
+
+    Args:
+        category_id: id of the category
+    """
     items = session.query(Project).filter_by(category_id=category_id).all()
     return jsonify(Projects=[i.serialize for i in items])
 
 
 @app.route('/catalog/JSON')
 def catalogJSON():
+    """Returns JSON view of all categories and their projects
+    """
     categories = session.query(Category).all()
     serializedCategories = []
     for i in categories:
@@ -563,11 +573,18 @@ def catalogJSON():
 
 
 def make_external(url):
+    """Returns external url for link back to item page
+
+    Args:
+        url: string containing url to Item page
+    """
     return urljoin(request.url_root, url)
 
 
 @app.route('/catalog/recent.atom')
 def atom_feed():
+    """Returns ATOM view of the 10 latest projects
+    """
     feed = AtomFeed('Recent Projects',
                     feed_url=request.url, url=request.url_root)
     items = session.query(Project).order_by(
