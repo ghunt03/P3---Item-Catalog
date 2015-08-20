@@ -10,11 +10,12 @@ This project is a web based application which can be used to store information a
 - Images / photos showcasing the project
 
 ##Requirements
-- Vagrant
-- VirtualBox
-- Python 2.7
-- Flask
-- SQL Alchemy
+- Vagrant (version 1.7.4)
+- VirtualBox (version 5)
+- Python (version 2.7)
+- Flask (version 0.10.1)
+- Flask SeaSurf (0.2.0)
+- SQL Alchemy (version 0.8.4)
 - SQLLite
 - Internet connection for OAuth2 authentication
 
